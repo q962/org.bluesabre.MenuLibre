@@ -1,20 +1,20 @@
 app-id: org.bluesabre.MenuLibre
 runtime: org.gnome.Platform
-runtime-version: '45'
+runtime-version: '47'
 sdk: org.gnome.Sdk
 command: menulibre-wrapper
 rename-icon: menulibre
 rename-desktop-file: menulibre.desktop
 rename-appdata-file: menulibre.appdata.xml
 finish-args:
-  - '--filesystem=host:ro'
-  - '--socket=fallback-x11'
-  - '--socket=wayland'
-  - '--share=ipc'
-  - '--filesystem=xdg-data/applications:create'
-  - '--filesystem=xdg-data/flatpak:ro'
-  - '--filesystem=/var/lib/flatpak:ro'
-  - '--filesystem=~/.gnome:create'
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --share=ipc
+  - --filesystem=xdg-data/applications:create
+  - --filesystem=xdg-data/desktop-directories:create
+  - --filesystem=xdg-config/menus:create
+  - --filesystem=xdg-data/flatpak:ro
+  - --filesystem=host:ro
 
 cleanup:
   - '/include'
@@ -41,10 +41,17 @@ modules:
       - '-Dselinux=disabled'
     sources:
       - type: archive
-        url: 'https://download.gnome.org/sources/glib/2.78/glib-2.78.0.tar.xz'
-        sha256: 44eaab8b720877ce303c5540b657b126f12dc94972d9880b52959f43fb537b30
-      - type: patch
-        path: 0001-do-not-test-exec.patch
+        url: 'https://download.gnome.org/sources/glib/2.82/glib-2.82.4.tar.xz'
+        sha256: 37dd0877fe964cd15e9a2710b044a1830fb1bd93652a6d0cb6b8b2dff187c709
+      - type: shell # patch: do-not-test-exec
+        commands:
+          - sed -i '1924,1955d' gio/gdesktopappinfo.c
+          - sed -i '1906,1918d' gio/gdesktopappinfo.c
+    cleanup:
+      - /share
+      - /lib/girepository-1.0
+      - /lib/glib-2.0
+      - /bin
 
   - name: python-distutils-extra
     buildsystem: simple
@@ -61,6 +68,8 @@ modules:
       - type: archive
         url: https://launchpad.net/intltool/trunk/0.51.0/+download/intltool-0.51.0.tar.gz
         sha256: 67c74d94196b153b774ab9f89b2fa6c6ba79352407037c8c14d5aeb334e959cd
+    cleanup:
+      - '*'
 
   - name: gnome-menu
     buildsystem: autotools
@@ -85,16 +94,25 @@ modules:
     cleanup: ['*']
     sources:
       - type: archive
-        url: http://links.twibright.com/download/links-2.29.tar.gz
-        sha256: c4f39438d066ffc161571f29c32b79073250fc61a389966430bbe8bc662cbae6
+        url: http://links.twibright.com/download/links-2.30.tar.gz
+        sha256: 7f0d54f4f7d1f094c25c9cbd657f98bc998311122563b1d757c9aeb1d3423b9e
 
   - name: xmlto
-    buildsystem: autotools
+    buildsystem: simple
+    build-commands:
+      - libtoolize --force
+      - aclocal
+      - autoheader
+      - automake --force-missing --add-missing
+      - autoconf
+      - ./configure --prefix=/app
+      - make
+      - make install
     cleanup: ['*']
     sources:
       - type: archive
-        url: https://releases.pagure.org/xmlto/xmlto-0.0.28.tar.bz2
-        sha256: 1130df3a7957eb9f6f0d29e4aa1c75732a7dfb6d639be013859b5c7ec5421276
+        url: https://releases.pagure.org/xmlto/xmlto-0.0.29.tar.bz2
+        sha256: 6000d8e8f0f9040426c4f85d7ad86789bc88d4aeaef585c4d4110adb0b214f21
 
   - name: xdg-utils
     buildsystem: autotools
@@ -117,13 +135,61 @@ modules:
       - type: script
         dest-filename: menulibre-wrapper
         commands:
-          - >-
-            export
-            XDG_DATA_DIRS=$XDG_DATA_DIRS:/run/host/usr/share:/var/lib/flatpak/exports/share:~/.local/share/flatpak/exports/share
+          - export TEMP=$XDG_CACHE_HOME/tmp
+          - FLATPAK_RUNTIME_DATA_DIRS=/usr/share:/usr/share/runtime/share:/run/host/user-share:/run/host/share
+          - FLATPAK_APP_DATA_HOME=$XDG_DATA_HOME/flatpak/exports/share
+          - HOST_DATA_DIRS=/run/host/usr/share:/run/host/usr/local/share
+          - HOST_CONFIG_DIRS=/run/host/usr/share:/run/host/usr/local/share:/run/host/etc/xdg
+          - export XDG_DATA_DIRS=$HOST_DATA_DIRS:$FLATPAK_APP_DATA_HOME:$OTHER_XDG_DATA_DIRS:$FLATPAK_RUNTIME_DATA_DIRS
+          - export XDG_CONFIG_DIRS=$HOST_CONFIG_DIRS:$OTHER_XDG_CONFIG_DIRS
           - menulibre "$@"
       - type: git
         url: https://github.com/bluesabre/menulibre.git
-        tag: menulibre-2.3.2
-        commit: 94bef4060714fa65c7246c25b87410b52a149f94
+        tag: menulibre-2.4.0
+        commit: ad8f3f68d243088a3dc48514269b6a35dae19022
+      - type: shell
+        commands:
+            # Using a custom suffix to execute the default program does not affect the default handler for .desktop files.
+            # For example, add '-exe' and configure the default program to run directly gio launch app.desktop-exe
+            - sed -i '1194s/,/+os.environ.get("DESKTOP_FILE_SUFFIX",""),/' menulibre/MenulibreApplication.py
 
+            # Fix start execute
+            - sed -i '1521,1531d' menulibre/MenulibreApplication.py
+            - sed -i '1520i\        subprocess.Popen(["xdg-open", filename])' menulibre/MenulibreApplication.py
+            - sed -i '1521i\        GObject.timeout_add(2000, self.on_execute_timeout, filename)' menulibre/MenulibreApplication.py
+
+            # Fix icon name
+            - sed -i '317c\        return model[treeiter][1]' menulibre/IconEntry.py
+
+            # Fix absolute icon paths
+            - |
+              cat <<EOF> patch-1
+                          elif os.path.isfile('/run/host'+icon_name):
+                              pixbuf = GdkPixbuf.Pixbuf.new_from_file('/run/host'+icon_name)
+                              if pixbuf is not None:
+                                  scaled = pixbuf.scale_simple(48, 48,
+                                                              GdkPixbuf.InterpType.HYPER)
+                                  self._image.set_from_pixbuf(scaled)
+                                  self._on_successful_image(icon_name, icon_name)
+                                  return
+              EOF
+              sed -i '116rpatch-1' menulibre/IconEntry.py
+            - |
+              cat <<EOF> patch-2
+                          if isinstance(icon, Gio.FileIcon):
+                              icon_path = icon.get_file().get_path()
+                              if not os.path.isfile(icon_path):
+                                  icon = Gio.FileIcon.new(Gio.File.new_for_path("/run/host/"+icon_path))
+
+              EOF
+              sed -i '271rpatch-2' menulibre/MenuEditor.py
+
+            # Fix update-desktop-database
+            # Manually execute 'update-desktop-database' to update the mimeinfo.cache in the user directory
+            - |
+              sed -i '190c\    subprocess.call(["update-desktop-database", GLib.get_user_data_dir()+"/applications"])' menulibre/MenulibreXdg.py
+              sed -i '231i\    desktop_menu_update()' menulibre/MenulibreXdg.py
+
+            # Fix GLib.get_system_config_dirs() return empty paths
+            - sed -i -e '204a\        if len(path) == 0:\n            continue' menulibre/MenulibreXdg.py
 
