@@ -5,7 +5,7 @@ sdk: org.gnome.Sdk
 command: menulibre-wrapper
 rename-icon: menulibre
 rename-desktop-file: menulibre.desktop
-rename-appdata-file: menulibre.appdata.xml
+# rename-appdata-file: menulibre.appdata.xml
 finish-args:
   - --socket=fallback-x11
   - --socket=wayland
@@ -193,3 +193,6 @@ modules:
             # Fix GLib.get_system_config_dirs() return empty paths
             - sed -i -e '204a\        if len(path) == 0:\n            continue' menulibre/MenulibreXdg.py
 
+            # Fix desktop_menu_install filter
+            # https://github.com/bluesabre/menulibre/issues/212
+            - sed -i -e '204s/config/data/' -e '207s/directory/desktop/' menulibre/MenulibreXdg.py
