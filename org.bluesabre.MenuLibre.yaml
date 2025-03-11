@@ -77,6 +77,11 @@ modules:
       - type: git
         url: https://gitlab.gnome.org/GNOME/gnome-menus.git
         tag: 3.36.0
+      - type: shell
+        commands:
+          # patch: do-not-test-exec
+          # Do not skip files that do not contain exec
+          - sed -i '260cFALSE)' libmenu/desktop-entries.c
 
   - name: python-psutil
     buildsystem: simple
