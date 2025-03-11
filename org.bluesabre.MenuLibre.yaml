@@ -170,13 +170,16 @@ modules:
             - |
               cat <<EOF> patch-1
                           elif os.path.isfile('/run/host'+icon_name):
-                              pixbuf = GdkPixbuf.Pixbuf.new_from_file('/run/host'+icon_name)
-                              if pixbuf is not None:
-                                  scaled = pixbuf.scale_simple(48, 48,
-                                                              GdkPixbuf.InterpType.HYPER)
-                                  self._image.set_from_pixbuf(scaled)
-                                  self._on_successful_image(icon_name, icon_name)
-                                  return
+                              try:
+                                  pixbuf = GdkPixbuf.Pixbuf.new_from_file('/run/host'+icon_name)
+                                  if pixbuf is not None:
+                                      scaled = pixbuf.scale_simple(48, 48,
+                                                                  GdkPixbuf.InterpType.HYPER)
+                                      self._image.set_from_pixbuf(scaled)
+                                      self._on_successful_image(icon_name, icon_name)
+                                      return
+                              except:
+                                  pass
               EOF
               sed -i '116rpatch-1' menulibre/IconEntry.py
             - |
@@ -188,6 +191,22 @@ modules:
 
               EOF
               sed -i '271rpatch-2' menulibre/MenuEditor.py
+
+            # Fix uncaught exception
+            - |
+              cat <<EOF> patch-3
+                              try:
+                                  pixbuf = GdkPixbuf.Pixbuf.new_from_file(icon_name)
+                                  if pixbuf is not None:
+                                      scaled = pixbuf.scale_simple(48, 48,
+                                                                  GdkPixbuf.InterpType.HYPER)
+                                      self._image.set_from_pixbuf(scaled)
+                                      self._on_successful_image(icon_name, icon_name)
+                                      return
+                              except:
+                                  pass
+              EOF
+              sed -i -e '110rpatch-3' -e '110,116d' menulibre/IconEntry.py
 
             # Fix update-desktop-database
             # Manually execute 'update-desktop-database' to update the mimeinfo.cache in the user directory
