@@ -208,6 +208,9 @@ modules:
               EOF
               sed -i -e '110rpatch-3' -e '110,116d' menulibre/IconEntry.py
 
+            # Fixed the issue that theme.has_icon does not search for non-theme icons in gtk3 version
+            - sed -i '95s/:/ or icon_theme.lookup_icon(icon_name, 48, Gtk.IconLookupFlags.FORCE_SVG):/' menulibre/IconEntry.py
+
             # Fix update-desktop-database
             # Manually execute 'update-desktop-database' to update the mimeinfo.cache in the user directory
             - |
